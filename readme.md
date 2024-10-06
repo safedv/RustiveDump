@@ -71,7 +71,7 @@ To build RustiveDump with different combinations of features, use the following 
   ```bash
   cargo make --env FEATURES=xor,remote,lsasrv,verbose
   ```
-
+  
 ## **Memory Dump File Structure**
 
 RustiveDump generates a minimalistic minidump file, including only the essential components for tools like **Mimikatz** and **Pypykatz**. The file consists of three core streams:
