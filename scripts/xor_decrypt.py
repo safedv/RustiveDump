@@ -44,7 +44,7 @@ def main():
     # Convert the XOR key from hexadecimal string to int
     xor_key = int(sys.argv[2], 16)
 
-    # Optionally get the output file path, default to "clear_output.dmp"
+    # Optionally get the output file path, default to "out.dmp"
     output_file_path = sys.argv[3] if len(sys.argv) > 3 else "out.dmp"
 
     # Perform decryption
