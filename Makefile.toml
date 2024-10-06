@@ -1,0 +1,32 @@
+[config]
+skip_core_tasks = true
+
+[env]
+TARGET = "x86_64-pc-windows-gnu"
+RUSTFLAGS = "-C link-arg=-nostdlib -C link-arg=-Wl,--gc-sections -C link-arg=-Wl,--subsystem,console -C link-arg=-nostartfiles -C link-arg=-Wl,-e_start"
+FEATURES = "" 
+
+[tasks.default]
+description = "Default task that builds the project."
+dependencies = ["build"]
+
+[tasks.build]
+description = "Cleans, builds, and strips the project."
+dependencies = ["clean", "cargo-build", "strip"]
+
+[tasks.clean]
+description = "Cleans the project and removes the binary file."
+script = [
+    "cargo clean",
+]
+
+[tasks.cargo-build]
+description = "Build the project using cargo with custom rustflags and features."
+command = "cargo"
+args = ["build", "--release", "--target", "${TARGET}", "--features", "${FEATURES}"]
+env = { "RUSTFLAGS" = "${RUSTFLAGS}" }
+
+[tasks.strip]
+description = "Strips unnecessary sections from the binary."
+command = "strip"
+args = ["-s", "--strip-unneeded", "-x", "-X", "target/x86_64-pc-windows-gnu/release/RustiveDump.exe"]

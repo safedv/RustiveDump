@@ -1,0 +1,23 @@
+[package]
+name = "RustiveDump"
+version = "0.1.0"
+edition = "2021"
+authors = ["safedv"]
+
+[dependencies]
+libc-print = { version = "0.1.23", optional = true }
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+opt-level = "s"
+lto = true
+
+[features]
+default = []
+xor = []
+remote = []
+lsasrv = []
+verbose = ["dep:libc-print"]
