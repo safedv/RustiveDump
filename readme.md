@@ -90,7 +90,7 @@ Always follow ethical guidelines and legal frameworks when doing security resear
 
 ## **Credits**
 
-- Inspired by [NativeDump](https://github.com/ricardojoserf/NativeDump). Thanks to the author for sharing their work.
+- Inspired by [NativeDump](https://github.com/ricardojoserf/NativeDump) by [ricardojoserf](https://github.com/ricardojoserf). Thanks to the author for sharing their work.
 
 ## **Contributions**
 
