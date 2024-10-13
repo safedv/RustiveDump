@@ -1,9 +1,3 @@
-#[cfg(not(feature = "remote"))]
-use alloc::string::String;
-
-#[cfg(not(feature = "remote"))]
-use crate::ntapi::def::UnicodeString;
-
 /// Computes the DJB2 hash for the given buffer
 pub fn dbj2_hash(buffer: &[u8]) -> u32 {
     let mut hsh: u32 = 5381;
@@ -60,31 +54,4 @@ impl IsNull for u16 {
     fn is_null(&self) -> bool {
         *self == 0
     }
-}
-
-#[cfg(not(feature = "remote"))]
-pub fn unicodestring_to_string(unicode_string: &UnicodeString) -> Option<String> {
-    if unicode_string.length == 0 || unicode_string.buffer.is_null() {
-        return None;
-    }
-
-    let slice = unsafe {
-        core::slice::from_raw_parts(unicode_string.buffer, (unicode_string.length / 2) as usize)
-    };
-
-    String::from_utf16(slice).ok()
-}
-
-#[cfg(feature = "verbose")]
-#[macro_export]
-macro_rules! debug_println {
-    ($($arg:tt)*) => ({
-        libc_println!($($arg)*);
-    });
-}
-
-#[cfg(not(feature = "verbose"))]
-#[macro_export]
-macro_rules! debug_println {
-    ($($arg:tt)*) => {};
 }

@@ -1,8 +1,9 @@
-use super::utils::{dbj2_hash, get_cstr_len};
-
-use crate::ntapi::def::{
-    find_peb, ImageDosHeader, ImageExportDirectory, ImageNtHeaders, LoaderDataTableEntry,
-    PebLoaderData, IMAGE_DOS_SIGNATURE, IMAGE_NT_SIGNATURE,
+use crate::{
+    common::utils::{dbj2_hash, get_cstr_len},
+    native::ntdef::{
+        find_peb, ImageDosHeader, ImageExportDirectory, ImageNtHeaders, LoaderDataTableEntry,
+        PebLoaderData, IMAGE_DOS_SIGNATURE, IMAGE_NT_SIGNATURE,
+    },
 };
 
 use core::ptr::null_mut;
@@ -90,7 +91,7 @@ pub unsafe fn ldr_function(module_base: *mut u8, function_hash: usize) -> *mut u
     }
 
     // Get the export directory from the NT headers
-    let data_directory = &(*p_img_nt_headers).optional_header.data_directory[0]; // Assuming IMAGE_DIRECTORY_ENTRY_EXPORT is 0
+    let data_directory = &(*p_img_nt_headers).optional_header.data_directory[0];
     let export_directory =
         (module_base.offset(data_directory.virtual_address as isize)) as *mut ImageExportDirectory;
     if export_directory.is_null() {

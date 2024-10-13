@@ -1,18 +1,41 @@
-#[cfg(feature = "verbose")]
-use libc_print::libc_println;
-
 use alloc::vec::Vec;
-use core::{ffi::c_void, ptr::null_mut};
-
-use crate::{common::utils::dbj2_hash, debug_println};
-
-use super::{
-    def::{
-        AccessMask, ClientId, ObjectAttributes, SystemProcessInformation, OBJ_CASE_INSENSITIVE,
-        STATUS_INFO_LENGTH_MISMATCH,
-    },
-    g_instance::instance,
+use core::{
+    ffi::{c_ulong, c_void},
+    ptr::null_mut,
 };
+
+use crate::{
+    debug_println,
+    instance::get_instance,
+    native::ntdef::{TokenPrivileges, LUID},
+};
+
+use super::ntdef::{
+    find_peb, ClientId, OSVersionInfo, ObjectAttributes, SystemProcessInformation,
+    OBJ_CASE_INSENSITIVE, STATUS_INFO_LENGTH_MISMATCH,
+};
+
+use crate::common::utils::dbj2_hash;
+
+pub unsafe fn rtl_get_version(lp_version_information: &mut OSVersionInfo) -> i32 {
+    // Get the pointer to the PEB
+    let peb = find_peb();
+
+    if lp_version_information.dw_os_version_info_size
+        != core::mem::size_of::<OSVersionInfo>() as u32
+    {
+        return -1;
+    }
+
+    // Fill in the version information from the PEB
+    lp_version_information.dw_major_version = (*peb).os_major_version;
+    lp_version_information.dw_minor_version = (*peb).os_minor_version;
+    lp_version_information.dw_build_number = (*peb).os_build_number;
+    lp_version_information.dw_platform_id = (*peb).os_platform_id;
+    lp_version_information.sz_csd_version.fill(0);
+
+    0
+}
 
 /// Takes a snapshot of the currently running processes.
 ///
@@ -26,11 +49,11 @@ pub unsafe fn nt_process_snapshot(
     let mut length: u32 = 0;
 
     // First call to determine the required length of the buffer for process information.
-    let mut status =
-        instance()
-            .ntdll
-            .nt_query_system_information
-            .run(5, null_mut(), 0, &mut length);
+    let mut status = get_instance()
+        .unwrap()
+        .ntdll
+        .nt_query_system_information
+        .run(5, null_mut(), 0, &mut length);
 
     // Check if the call returned STATUS_INFO_LENGTH_MISMATCH (expected) or another error.
     if status != STATUS_INFO_LENGTH_MISMATCH && status != 0 {
@@ -42,12 +65,11 @@ pub unsafe fn nt_process_snapshot(
     buffer.resize(length as usize, 0);
 
     // Second call to actually retrieve the process information into the allocated buffer.
-    status = instance().ntdll.nt_query_system_information.run(
-        5,
-        buffer.as_mut_ptr() as *mut c_void,
-        length,
-        &mut length,
-    );
+    status = get_instance()
+        .unwrap()
+        .ntdll
+        .nt_query_system_information
+        .run(5, buffer.as_mut_ptr() as *mut c_void, length, &mut length);
 
     // Check if the process information retrieval was successful.
     if status != 0 {
@@ -69,7 +91,7 @@ pub unsafe fn nt_process_snapshot(
 /// This function opens a handle to a target process by specifying its process ID (PID) and the desired access rights.
 /// The syscall `NtOpenProcess` is used to obtain the handle, and the function initializes the required structures
 /// (`OBJECT_ATTRIBUTES` and `CLIENT_ID`) needed to make the system call.
-pub unsafe fn get_process_handle(pid: i32, desired_access: AccessMask) -> *mut c_void {
+pub unsafe fn get_process_handle(pid: i32, desired_access: c_ulong) -> *mut c_void {
     let mut process_handle: *mut c_void = null_mut();
 
     // Initialize object attributes for the process, setting up the basic structure with default options.
@@ -88,7 +110,7 @@ pub unsafe fn get_process_handle(pid: i32, desired_access: AccessMask) -> *mut c
     client_id.unique_process = pid as _;
 
     // Perform a system call to NtOpenProcess to obtain a handle to the specified process.
-    instance().ntdll.nt_open_process.run(
+    get_instance().unwrap().ntdll.nt_open_process.run(
         &mut process_handle,
         desired_access,
         &mut object_attributes,
@@ -100,9 +122,9 @@ pub unsafe fn get_process_handle(pid: i32, desired_access: AccessMask) -> *mut c
 
 /// Retrieves a handle to a process with the specified name hash and desired access rights using the NT API.
 ///
-/// This function takes a process name hash, searches for its process ID (PID) using the `process_snapshot` function,
+/// This function takes a process name hash, searches for a matching process name using the `nt_process_snapshot` function,
 /// and then opens a handle to the process using `NtOpenProcess`.
-pub unsafe fn get_process_handle_by_name(name: u32, desired_access: AccessMask) -> *mut c_void {
+pub unsafe fn get_process_handle_by_name(name: u32, desired_access: c_ulong) -> *mut c_void {
     let mut snapshot: *mut SystemProcessInformation = null_mut();
     let mut size: usize = 0;
 
@@ -110,10 +132,7 @@ pub unsafe fn get_process_handle_by_name(name: u32, desired_access: AccessMask) 
     let status = nt_process_snapshot(&mut snapshot, &mut size);
 
     if status != 0 {
-        debug_println!(
-            "Failed to retrieve process snapshot: NTSTATUS: 0x{:X}",
-            status
-        );
+        debug_println!("Failed to retrieve process snapshot with status: ", status);
         return null_mut();
     }
 
@@ -146,4 +165,57 @@ pub unsafe fn get_process_handle_by_name(name: u32, desired_access: AccessMask) 
     }
 
     null_mut()
+}
+
+/// This function enables the SeDebugPrivilege privilege using the NT API.
+pub unsafe fn enable_se_debug_privilege() -> i32 {
+    const TOKEN_ADJUST_PRIVILEGES: u32 = 32u32;
+    const TOKEN_QUERY: u32 = 8u32;
+
+    let current_process_handle = -1isize as *mut c_void;
+    let mut token_handle: *mut c_void = null_mut();
+
+    // Open the process token.
+    let ntstatus = get_instance().unwrap().ntdll.nt_open_process_token.run(
+        current_process_handle,
+        TOKEN_QUERY | TOKEN_ADJUST_PRIVILEGES,
+        &mut token_handle,
+    );
+
+    if ntstatus != 0 {
+        debug_println!("[-] NtOpenProcessToken failed with status: ", ntstatus);
+        return ntstatus;
+    }
+
+    let luid = LUID {
+        low_part: 20,
+        high_part: 0,
+    };
+
+    let mut token_privileges = TokenPrivileges {
+        privilege_count: 1,
+        luid: luid,
+        attributes: 0x00000002,
+    };
+
+    // Adjust token privileges to enable SeDebugPrivilege.
+    let ntstatus = get_instance()
+        .unwrap()
+        .ntdll
+        .nt_adjust_privileges_token
+        .run(
+            token_handle,
+            false,
+            &mut token_privileges,
+            core::mem::size_of::<TokenPrivileges>() as u32,
+            null_mut(),
+            null_mut(),
+        );
+
+    if ntstatus != 0 {
+        debug_println!("[-] NtAdjustPrivilegesToken failed with status: ", ntstatus);
+        return ntstatus;
+    }
+
+    ntstatus
 }

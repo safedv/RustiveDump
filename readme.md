@@ -4,29 +4,34 @@
 
 It creates a minimal minidump file from scratch, containing essential components like **SystemInfo**, **ModuleList**, and **Memory64List**, with support for **XOR encryption** and **remote transmission**.
 
+Additionally, RustiveDump now implements the design of [Rustic64](https://github.com/safedv/Rustic64), allowing it to be compiled as **Position Independent Code (PIC)**, making it more versatile.
+
 This project is a personal learning experience, focusing on leveraging native Windows APIs for memory dumping and building a minimalistic minidump file entirely from the ground up.
 
 ## **Key Features**
 
-1. **NT System Calls for Everything**  
+1. **NT System Calls for Everything**:
    RustiveDump bypasses standard APIs and leverages NT system calls for all its operations.
 
 2. **No-Std and CRT-Independent**:  
    RustiveDump is built using Rust's `no_std` feature, which removes reliance on Rust's standard library, and it's also **CRT library independent**. This resulting in a lean release build of only **18KB**.
 
-3. **Indirect NT Syscalls**:  
+3. **Position Independent Code (PIC)**:  
+   RustiveDump now implements the design of Rustic64, allowing it to be compiled as `shellcode (PIC)`, making it more versatile.
+
+4. **Indirect NT Syscalls**:  
    The tool uses indirect syscalls, retrieving system service numbers (SSN) with techniques like **Hell’s Gate**, **Halo's Gate**, and **Tartarus' Gate**.
 
-4. **Lean Memory Dump**:  
+5. **Lean Memory Dump**:  
    RustiveDump generates a focused memory dump, containing only essential data (i.e., **SystemInfo**, **ModuleList**, and **Memory64List**), ensuring no bloated files—just enough to feed your memory analysis tools like **Mimikatz** or **Pypykatz**.
 
-5. **XOR Encryption**:  
+6. **XOR Encryption**:  
    RustiveDump can encrypt the dump file using XOR before saving or transmitting it, adding an extra layer of security to the dumped memory.
 
-6. **Remote File Transmission**:  
+7. **Remote File Transmission**:  
    The dump file can be sent directly to a remote server using **winsock** APIs calls
 
-7. **Verbose Mode**:  
+8. **Debug Mode**:  
    The verbose mode provides detailed logs of each step, which can be enabled during the build process.
 
 ## **How it works**
@@ -53,7 +58,7 @@ RustiveDump offers several configurable build options through **cargo make** to 
 **Available Features:**
 
 - **xor**: Encrypts the dump file using XOR encryption.
-- **verbose**: Enables detailed logs for each step of the process.
+- **debug**: Enables detailed logs for each step of the process.
 - **remote**: Sends the dump file to a remote server via Winsock.
 - **lsasrv**: Filters the memory dump to include only the `lsasrv.dll` module from **lsass.exe**.
 
@@ -68,10 +73,16 @@ To build RustiveDump with different combinations of features, use the following 
   ```
 
 - **Build with specific features**
+
   ```bash
-  cargo make --env FEATURES=xor,remote,lsasrv,verbose
+  cargo make --env FEATURES=xor,remote,lsasrv,debug
   ```
-  
+
+- **Build as Shellcode (PIC)**
+  ```bash
+  cargo make --env FEATURES=xor,remote pic
+  ```
+
 ## **Memory Dump File Structure**
 
 RustiveDump generates a minimalistic minidump file, including only the essential components for tools like **Mimikatz** and **Pypykatz**. The file consists of three core streams:
@@ -90,7 +101,7 @@ Always follow ethical guidelines and legal frameworks when doing security resear
 
 ## **Credits**
 
-- Inspired by [NativeDump](https://github.com/ricardojoserf/NativeDump). Thanks to the author for sharing their work.
+- Inspired by [NativeDump](https://github.com/ricardojoserf/NativeDump) by [ricardojoserf](https://github.com/ricardojoserf). Thanks to the author for sharing their work.
 
 ## **Contributions**
 
