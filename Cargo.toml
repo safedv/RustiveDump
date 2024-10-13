@@ -1,11 +1,11 @@
 [package]
 name = "RustiveDump"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["safedv"]
 
 [dependencies]
-libc-print = { version = "0.1.23", optional = true }
+panic-halt = "0.2.0"
 
 [profile.dev]
 panic = "abort"
@@ -14,10 +14,11 @@ panic = "abort"
 panic = "abort"
 opt-level = "s"
 lto = true
+codegen-units = 1
 
 [features]
 default = []
+debug = []
 xor = []
 remote = []
 lsasrv = []
-verbose = ["dep:libc-print"]

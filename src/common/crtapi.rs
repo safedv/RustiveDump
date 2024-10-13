@@ -103,8 +103,3 @@ pub extern "C" fn strlen(s: *const u8) -> usize {
     }
     count
 }
-
-/// A static variable required by some environments to indicate floating-point usage.
-/// This is a placeholder to ensure compatibility.
-#[export_name = "_fltused"]
-static _FLTUSED: i32 = 0;

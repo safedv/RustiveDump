@@ -1,50 +1,6 @@
-use core::arch::global_asm;
-
-global_asm!(
-    r#"
-.globl do_syscall
-
-.section .text
-
-do_syscall:
-    mov [rsp - 0x8],  rsi
-    mov [rsp - 0x10], rdi
-    mov [rsp - 0x18], r12
-
-    xor r10, r10			
-    mov rax, rcx			
-    mov r10, rax
-
-    mov eax, ecx
-
-    mov r12, rdx
-    mov rcx, r8
-
-    mov r10, r9
-    mov rdx,  [rsp + 0x28]
-    mov r8,   [rsp + 0x30]
-    mov r9,   [rsp + 0x38]
-
-    sub rcx, 0x4
-    jle skip
-
-    lea rsi,  [rsp + 0x40]
-    lea rdi,  [rsp + 0x28]
-
-    rep movsq
-skip:
-    mov rcx, r12
-
-    mov rsi, [rsp - 0x8]
-    mov rdi, [rsp - 0x10]
-    mov r12, [rsp - 0x18]
-
-    jmp rcx
-"#
-);
-
 extern "C" {
-    pub fn do_syscall(ssn: u16, addr: usize, n_args: u32, ...) -> i32;
+    // Declaration of an external syscall function with a variadic argument list
+    pub fn isyscall(ssn: u16, addr: usize, n_args: u32, ...) -> i32;
 }
 
 #[cfg(target_arch = "x86_64")]
@@ -62,7 +18,7 @@ macro_rules! run_syscall {
 
             // Perform the syscall with the given number, address (offset by 0x12),
             // argument count, and the arguments
-            unsafe { $crate::ntapi::syscall_gate::do_syscall($ssn, $addr + 0x12, cnt, $($y), +) }
+            unsafe { $crate::native::gate::isyscall($ssn, $addr + 0x12, cnt, $($y), +) }
         }
     }
 }
@@ -71,7 +27,6 @@ const UP: isize = -32; // Constant for upward memory search
 const DOWN: usize = 32; // Constant for downward memory search
 
 pub unsafe fn get_ssn(address: *mut u8) -> u16 {
-    // Check if the address is null
     if address.is_null() {
         return 0;
     }
@@ -85,7 +40,6 @@ pub unsafe fn get_ssn(address: *mut u8) -> u16 {
         && address.add(6).read() == 0x00
         && address.add(7).read() == 0x00
     {
-        // Extract the syscall number from the instruction
         let high = address.add(5).read() as u16;
         let low = address.add(4).read() as u16;
         return ((high << 8) | low) as u16;

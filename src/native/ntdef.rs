@@ -1,13 +1,8 @@
-use core::{
-    arch::asm,
-    ffi::{c_long, c_ulong, c_void},
-    ptr,
-};
+use core::arch::asm;
+use core::ffi::{c_long, c_ulong, c_void};
+use core::ptr;
 
 use crate::common::utils::string_length_w;
-
-pub const PROCESS_QUERY_INFORMATION: AccessMask = 0x0400;
-pub const PROCESS_VM_READ: AccessMask = 0x0010;
 
 pub const IMAGE_DOS_SIGNATURE: u16 = 0x5A4D; // "MZ"
 pub const IMAGE_NT_SIGNATURE: u32 = 0x00004550; // "PE\0\0"
@@ -50,80 +45,6 @@ impl UnicodeString {
             self.buffer = ptr::null_mut();
         }
     }
-}
-
-pub type ULONG = c_ulong;
-pub type HANDLE = *mut c_void;
-pub type AccessMask = ULONG;
-
-#[repr(C)]
-pub struct ObjectAttributes {
-    pub length: ULONG,
-    pub root_directory: HANDLE,
-    pub object_name: *mut UnicodeString,
-    pub attributes: ULONG,
-    pub security_descriptor: *mut c_void,
-    pub security_quality_of_service: *mut c_void,
-}
-
-impl ObjectAttributes {
-    pub fn new() -> Self {
-        ObjectAttributes {
-            length: 0,
-            root_directory: ptr::null_mut(),
-            object_name: ptr::null_mut(),
-            attributes: 0,
-            security_descriptor: ptr::null_mut(),
-            security_quality_of_service: ptr::null_mut(),
-        }
-    }
-
-    //InitializeObjectAttributes
-    pub fn initialize(
-        p: &mut ObjectAttributes,
-        n: *mut UnicodeString,
-        a: ULONG,
-        r: HANDLE,
-        s: *mut c_void,
-    ) {
-        p.length = core::mem::size_of::<ObjectAttributes>() as ULONG;
-        p.root_directory = r;
-        p.attributes = a;
-        p.object_name = n;
-        p.security_descriptor = s;
-        p.security_quality_of_service = ptr::null_mut();
-    }
-}
-
-#[repr(C)]
-pub struct MemoryBasicInformation {
-    pub base_address: *mut c_void,
-    pub allocation_base: *mut c_void,
-    pub allocation_protect: u32,
-    pub region_size: u64,
-    pub state: u32,
-    pub protect: u32,
-    pub r#type: u32,
-}
-
-#[repr(C)]
-pub struct ProcessBasicInformation {
-    pub exit_status: i32,
-    pub peb_base_address: *mut c_void,
-    pub affinity_mask: usize,
-    pub base_priority: i32,
-    pub unique_process_id: *mut c_void,
-    pub inherited_from_unique_process_id: *mut c_void,
-}
-
-pub const MEM_COMMIT: u32 = 0x1000;
-pub const PAGE_NOACCESS: u32 = 0x01;
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct LargeInteger {
-    pub low_part: u32,
-    pub high_part: i32,
 }
 
 #[repr(C)]
@@ -384,13 +305,88 @@ pub fn find_peb() -> *mut PEB {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
+pub struct LargeInteger {
+    pub low_part: u32,
+    pub high_part: i32,
+}
+
+#[repr(C)]
+pub struct ClientId {
+    pub unique_process: *mut c_void,
+    pub unique_thread: *mut c_void,
+}
+
+impl ClientId {
+    pub fn new() -> Self {
+        ClientId {
+            unique_process: core::ptr::null_mut(),
+            unique_thread: core::ptr::null_mut(),
+        }
+    }
+}
+
+#[repr(C)]
+pub struct ObjectAttributes {
+    pub length: c_ulong,
+    pub root_directory: *mut c_void,
+    pub object_name: *mut UnicodeString,
+    pub attributes: c_ulong,
+    pub security_descriptor: *mut c_void,
+    pub security_quality_of_service: *mut c_void,
+}
+
+impl ObjectAttributes {
+    pub fn new() -> Self {
+        ObjectAttributes {
+            length: 0,
+            root_directory: ptr::null_mut(),
+            object_name: ptr::null_mut(),
+            attributes: 0,
+            security_descriptor: ptr::null_mut(),
+            security_quality_of_service: ptr::null_mut(),
+        }
+    }
+
+    //InitializeObjectAttributes
+    pub fn initialize(
+        p: &mut ObjectAttributes,
+        n: *mut UnicodeString,
+        a: c_ulong,
+        r: *mut c_void,
+        s: *mut c_void,
+    ) {
+        p.length = core::mem::size_of::<ObjectAttributes>() as c_ulong;
+        p.root_directory = r;
+        p.attributes = a;
+        p.object_name = n;
+        p.security_descriptor = s;
+        p.security_quality_of_service = ptr::null_mut();
+    }
+}
+
+#[repr(C)]
+pub union IO_STATUS_BLOCK_u {
+    pub status: i32,
+    pub pointer: *mut c_void,
+}
+
+#[repr(C)]
+pub struct IoStatusBlock {
+    pub u: IO_STATUS_BLOCK_u,
+    pub information: c_ulong,
+}
+
+pub const OBJ_CASE_INSENSITIVE: c_ulong = 0x40;
+
+#[repr(C)]
 pub struct OSVersionInfo {
     pub dw_os_version_info_size: u32,
     pub dw_major_version: u32,
     pub dw_minor_version: u32,
     pub dw_build_number: u32,
     pub dw_platform_id: u32,
-    pub sz_csd_version: [u16; 128], // WCHAR is usually represented as u16 in Rust
+    pub sz_csd_version: [u16; 128],
     pub dw_os_version_info_size_2: u32,
     pub dw_major_version_2: u32,
     pub dw_minor_version_2: u32,
@@ -415,19 +411,30 @@ impl OSVersionInfo {
         }
     }
 }
-#[allow(dead_code)]
+
 #[repr(C)]
-pub union IO_STATUS_BLOCK_u {
-    pub status: i32,
-    pub pointer: *mut c_void,
+pub struct MemoryBasicInformation {
+    pub base_address: *mut c_void,
+    pub allocation_base: *mut c_void,
+    pub allocation_protect: u32,
+    pub region_size: u64,
+    pub state: u32,
+    pub protect: u32,
+    pub r#type: u32,
 }
 
-#[allow(dead_code)]
 #[repr(C)]
-pub struct IoStatusBlock {
-    pub u: IO_STATUS_BLOCK_u,
-    pub information: u32,
+pub struct ProcessBasicInformation {
+    pub exit_status: i32,
+    pub peb_base_address: *mut c_void,
+    pub affinity_mask: usize,
+    pub base_priority: i32,
+    pub unique_process_id: *mut c_void,
+    pub inherited_from_unique_process_id: *mut c_void,
 }
+
+pub const MEM_COMMIT: u32 = 0x1000;
+pub const PAGE_NOACCESS: u32 = 0x01;
 
 #[repr(C)]
 pub struct LUID {
@@ -496,20 +503,6 @@ pub struct SystemThreadInformation {
     pub wait_reason: u32,
 }
 
-#[repr(C)]
-pub struct ClientId {
-    pub unique_process: *mut c_void,
-    pub unique_thread: *mut c_void,
-}
-
-impl ClientId {
-    pub fn new() -> Self {
-        ClientId {
-            unique_process: core::ptr::null_mut(),
-            unique_thread: core::ptr::null_mut(),
-        }
-    }
-}
-
 pub const STATUS_INFO_LENGTH_MISMATCH: i32 = 0xC0000004u32 as i32;
-pub const OBJ_CASE_INSENSITIVE: u32 = 0x40;
+pub const PROCESS_QUERY_INFORMATION: c_ulong = 0x0400;
+pub const PROCESS_VM_READ: c_ulong = 0x0010;

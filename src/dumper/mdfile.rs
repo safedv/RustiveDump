@@ -1,9 +1,6 @@
-#[cfg(feature = "verbose")]
-use libc_print::libc_println;
-
 use alloc::{string::String, vec::Vec};
 
-use crate::{debug_println, ntapi::def::OSVersionInfo};
+use crate::{debug_println, native::ntdef::OSVersionInfo};
 
 // Struct for holding information about a module (DLL), including its base name,
 // full path, base address in memory, and the size of the memory region it occupies.
@@ -45,12 +42,16 @@ pub fn generate_memory_dump_file(
     let offset_memory_regions = mem64list_offset + mem64list_size; // The actual memory dump data comes after Memory64List.
 
     // Debug prints to show calculated values if verbose mode is enabled.
-    debug_println!("[+] Total number of modules: {}", number_modules);
-    debug_println!("[+] ModuleListStream size: {}", modulelist_size);
-    debug_println!("[+] Mem64List offset: {}", mem64list_offset);
-    debug_println!("[+] Mem64List size: {}", mem64list_size);
-    debug_println!("[+] Regions memory dump size: {}", regions_memdump.len());
-    debug_println!("[+] Number of memory regions: {}", memory64list.len());
+    debug_println!("[+] Total number of modules: ", number_modules, false);
+    debug_println!("[+] ModuleListStream size: ", modulelist_size, false);
+    debug_println!("[+] Mem64List offset: ", mem64list_offset, false);
+    debug_println!("[+] Mem64List size: ", mem64list_size, false);
+    debug_println!(
+        "[+] Regions memory dump size: ",
+        regions_memdump.len(),
+        false
+    );
+    debug_println!("[+] Number of memory regions: ", memory64list.len(), false);
 
     // **Header section for the dump file**
     let mut header: Vec<u8> = Vec::new();

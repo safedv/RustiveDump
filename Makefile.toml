@@ -3,30 +3,53 @@ skip_core_tasks = true
 
 [env]
 TARGET = "x86_64-pc-windows-gnu"
-RUSTFLAGS = "-C link-arg=-nostdlib -C link-arg=-Wl,--gc-sections -C link-arg=-Wl,--subsystem,console -C link-arg=-nostartfiles -C link-arg=-Wl,-e_start"
-FEATURES = "" 
+PIC_RUSTFLAGS = "-C link-arg=-nostdlib -C codegen-units=1 -C link-arg=-fno-ident -C link-arg=-fpack-struct=8 -C link-arg=-Wl,--gc-sections -C link-arg=-falign-jumps=1 -C link-arg=-w -C link-arg=-falign-labels=1 -C relocation-model=pic -C link-arg=-Wl,-T./Linker.ld,--build-id=none -C link-arg=-Wl,-s,--no-seh,--enable-stdcall-fixup -C link-arg=-Wl,--subsystem,console -C link-arg=-nostartfiles -C link-arg=-Wl,-e_start"
+EXE_RUSTFLAGS = "-C link-arg=-nostdlib -C link-arg=-Wl,--gc-sections -C link-arg=-Wl,--subsystem,console -C link-arg=-nostartfiles -C link-arg=-Wl,-e_start"
+FEATURES = ""
 
 [tasks.default]
 description = "Default task that builds the project."
 dependencies = ["build"]
 
 [tasks.build]
-description = "Cleans, builds, and strips the project."
+description = "Clean, Builds, strips, and objcopy."
 dependencies = ["clean", "cargo-build", "strip"]
 
 [tasks.clean]
 description = "Cleans the project and removes the binary file."
 script = [
-    "cargo clean",
+    "cargo clean"
 ]
 
 [tasks.cargo-build]
-description = "Build the project using cargo with custom rustflags and features."
+description = "Build the project using cargo with custom rustflags."
 command = "cargo"
 args = ["build", "--release", "--target", "${TARGET}", "--features", "${FEATURES}"]
-env = { "RUSTFLAGS" = "${RUSTFLAGS}" }
+env = { "RUSTFLAGS" = "${EXE_RUSTFLAGS}" }
 
 [tasks.strip]
 description = "Strips unnecessary sections from the binary."
 command = "strip"
 args = ["-s", "--strip-unneeded", "-x", "-X", "target/x86_64-pc-windows-gnu/release/RustiveDump.exe"]
+
+[tasks.pic]
+description = "Builds with PIC enabled."
+dependencies = ["cleanpic", "cargo-build-pic", "strip", "objcopy"]
+
+[tasks.cleanpic]
+description = "Cleans the project and removes the binary file."
+script = [
+    "cargo clean",
+    "rm -f RustiveDump.bin"
+]
+
+[tasks.cargo-build-pic]
+description = "Build the project using cargo with PIC enabled."
+command = "cargo"
+args = ["build", "--release", "--target", "${TARGET}", "--features", "${FEATURES}"]
+env = { "RUSTFLAGS" = "${PIC_RUSTFLAGS}" }
+
+[tasks.objcopy]
+description = "Converts the binary to a .bin file using objcopy."
+command = "objcopy"
+args = ["-O", "binary", "target/x86_64-pc-windows-gnu/release/RustiveDump.exe", "RustiveDump.bin"]

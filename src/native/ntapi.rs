@@ -4,11 +4,16 @@ use core::{
 };
 
 use crate::{
-    ntapi::def::{AccessMask, IoStatusBlock, LargeInteger, ObjectAttributes, UnicodeString},
+    common::ldrapi::{ldr_function, ldr_module},
+    instance::get_instance,
+    native::{
+        gate::get_ssn,
+        ntdef::{IoStatusBlock, LargeInteger, ObjectAttributes, UnicodeString},
+    },
     run_syscall,
 };
 
-use super::def::TokenPrivileges;
+use super::ntdef::TokenPrivileges;
 
 pub struct NtSyscall {
     /// The number of the syscall
@@ -186,7 +191,7 @@ impl NtOpenProcess {
     pub fn run(
         &self,
         process_handle: &mut *mut c_void,
-        desired_access: AccessMask,
+        desired_access: c_ulong,
         object_attributes: &mut ObjectAttributes,
         client_id: *mut c_void,
     ) -> i32 {
@@ -475,7 +480,7 @@ impl NtOpenProcessToken {
     pub fn run(
         &self,
         process_handle: *mut c_void,
-        desired_access: AccessMask,
+        desired_access: c_ulong,
         token_handle: &mut *mut c_void,
     ) -> i32 {
         run_syscall!(
@@ -591,4 +596,111 @@ impl NtDll {
             nt_adjust_privileges_token: NtAdjustPrivilegesToken::new(),
         }
     }
+}
+
+pub unsafe fn init_ntdll_funcs() {
+    const NTDLL_HASH: u32 = 0x1edab0ed;
+
+    let instance = get_instance().unwrap();
+
+    instance.ntdll.module_base = ldr_module(NTDLL_HASH);
+
+    // Resolve LdrLoadDll
+    let ldr_load_dll_addr = ldr_function(instance.ntdll.module_base, 0x9e456a43);
+    instance.ntdll.ldr_load_dll = core::mem::transmute(ldr_load_dll_addr);
+
+    // NtAllocateVirtualMemory
+    instance.ntdll.nt_allocate_virtual_memory.syscall.address = ldr_function(
+        instance.ntdll.module_base,
+        instance.ntdll.nt_allocate_virtual_memory.syscall.hash,
+    );
+    instance.ntdll.nt_allocate_virtual_memory.syscall.number =
+        get_ssn(instance.ntdll.nt_allocate_virtual_memory.syscall.address);
+
+    // NtFreeVirtualMemory
+    instance.ntdll.nt_free_virtual_memory.syscall.address = ldr_function(
+        instance.ntdll.module_base,
+        instance.ntdll.nt_free_virtual_memory.syscall.hash,
+    );
+    instance.ntdll.nt_free_virtual_memory.syscall.number =
+        get_ssn(instance.ntdll.nt_free_virtual_memory.syscall.address);
+
+    // NtReadVirtualMemory
+    instance.ntdll.nt_read_virtual_memory.syscall.address = ldr_function(
+        instance.ntdll.module_base,
+        instance.ntdll.nt_read_virtual_memory.syscall.hash,
+    );
+    instance.ntdll.nt_read_virtual_memory.syscall.number =
+        get_ssn(instance.ntdll.nt_read_virtual_memory.syscall.address);
+
+    // NtQueryVirtualMemory
+    instance.ntdll.nt_query_virtual_memory.syscall.address = ldr_function(
+        instance.ntdll.module_base,
+        instance.ntdll.nt_query_virtual_memory.syscall.hash,
+    );
+    instance.ntdll.nt_query_virtual_memory.syscall.number =
+        get_ssn(instance.ntdll.nt_query_virtual_memory.syscall.address);
+
+    // NtOpenProcess
+    instance.ntdll.nt_open_process.syscall.address = ldr_function(
+        instance.ntdll.module_base,
+        instance.ntdll.nt_open_process.syscall.hash,
+    );
+    instance.ntdll.nt_open_process.syscall.number =
+        get_ssn(instance.ntdll.nt_open_process.syscall.address);
+
+    // NtQuerySystemInformation
+    instance.ntdll.nt_query_system_information.syscall.address = ldr_function(
+        instance.ntdll.module_base,
+        instance.ntdll.nt_query_system_information.syscall.hash,
+    );
+    instance.ntdll.nt_query_system_information.syscall.number =
+        get_ssn(instance.ntdll.nt_query_system_information.syscall.address);
+
+    // NtQueryInformationProcess
+    instance.ntdll.nt_query_information_process.syscall.address = ldr_function(
+        instance.ntdll.module_base,
+        instance.ntdll.nt_query_information_process.syscall.hash,
+    );
+    instance.ntdll.nt_query_information_process.syscall.number =
+        get_ssn(instance.ntdll.nt_query_information_process.syscall.address);
+
+    // NtCreateFile
+    instance.ntdll.nt_create_file.syscall.address = ldr_function(
+        instance.ntdll.module_base,
+        instance.ntdll.nt_create_file.syscall.hash,
+    );
+    instance.ntdll.nt_create_file.syscall.number =
+        get_ssn(instance.ntdll.nt_create_file.syscall.address);
+
+    // NtWriteFile
+    instance.ntdll.nt_write_file.syscall.address = ldr_function(
+        instance.ntdll.module_base,
+        instance.ntdll.nt_write_file.syscall.hash,
+    );
+    instance.ntdll.nt_write_file.syscall.number =
+        get_ssn(instance.ntdll.nt_write_file.syscall.address);
+
+    // NtClose
+    instance.ntdll.nt_close.syscall.address = ldr_function(
+        instance.ntdll.module_base,
+        instance.ntdll.nt_close.syscall.hash,
+    );
+    instance.ntdll.nt_close.syscall.number = get_ssn(instance.ntdll.nt_close.syscall.address);
+
+    // NtOpenProcessToken
+    instance.ntdll.nt_open_process_token.syscall.address = ldr_function(
+        instance.ntdll.module_base,
+        instance.ntdll.nt_open_process_token.syscall.hash,
+    );
+    instance.ntdll.nt_open_process_token.syscall.number =
+        get_ssn(instance.ntdll.nt_open_process_token.syscall.address);
+
+    // NtAdjustPrivilegesToken
+    instance.ntdll.nt_adjust_privileges_token.syscall.address = ldr_function(
+        instance.ntdll.module_base,
+        instance.ntdll.nt_adjust_privileges_token.syscall.hash,
+    );
+    instance.ntdll.nt_adjust_privileges_token.syscall.number =
+        get_ssn(instance.ntdll.nt_adjust_privileges_token.syscall.address);
 }
