@@ -32,7 +32,7 @@ This project is a personal learning experience, focusing on leveraging native Wi
    The dump file can be sent directly to a remote server using **winsock** APIs calls
 
 8. **Debug Mode**:  
-   The verbose mode provides detailed logs of each step, which can be enabled during the build process.
+   The debug mode provides detailed logs of each step, which can be enabled during the build process.
 
 ## **How it works**
 
