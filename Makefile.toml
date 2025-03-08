@@ -29,8 +29,8 @@ script = [
 
 [tasks.cargo-build]
 description = "Compiles the project for the GNU target (exe)."
-command = "cargo"
-args = ["build", "--release", "--target", "${TARGET_GNU}", "--features", "${FEATURES}"]
+command = "rustup"
+args = ["run", "nightly-2025-02-13-x86_64-pc-windows-gnu", "cargo", "rustc", "--target", "${TARGET_GNU}", "--release", "--features", "${FEATURES}"]
 env = { "RUSTFLAGS" = "${RUSTFLAGS_GNU_EXE}" }
 
 [tasks.strip]
@@ -51,8 +51,8 @@ script = [
 
 [tasks.cargo-build-pic-gnu]
 description = "Compiles the project as PIC for the GNU target."
-command = "cargo"
-args = ["build", "--release", "--target", "${TARGET_GNU}", "--features", "${FEATURES}"]
+command = "rustup"
+args = ["run", "nightly-2025-02-13-x86_64-pc-windows-gnu", "cargo", "rustc", "--target", "${TARGET_GNU}", "--release", "--features", "${FEATURES}"]
 env = { "RUSTFLAGS" = "${RUSTFLAGS_GNU_PIC}" }
 
 [tasks.objcopy]
@@ -66,8 +66,8 @@ dependencies = ["clean", "cargo-build-pic-msvc", "strip-msvc", "objcopy-msvc"]
 
 [tasks.cargo-build-pic-msvc]
 description = "Compiles the project as PIC for the MSVC target."
-command = "cargo"
-args = ["build", "--release", "--target", "${TARGET_MSVC}", "--features", "${FEATURES}"]
+command = "rustup"
+args = ["run", "nightly-2025-02-13-x86_64-pc-windows-msvc", "cargo", "rustc", "--target", "${TARGET_MSVC}", "--release", "--features", "${FEATURES}"]
 env = { "RUSTFLAGS" = "${RUSTFLAGS_MSVC_PIC}" }
 
 [tasks.strip-msvc]
