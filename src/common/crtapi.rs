@@ -8,7 +8,7 @@
 ///
 /// # Returns
 /// A pointer to the memory area `s`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn memset(s: *mut u8, c: i32, n: usize) -> *mut u8 {
     for i in 0..n {
         unsafe { *s.add(i) = c as u8 };
@@ -26,7 +26,7 @@ pub extern "C" fn memset(s: *mut u8, c: i32, n: usize) -> *mut u8 {
 ///
 /// # Returns
 /// A pointer to the destination `dest`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
     for i in 0..n {
         unsafe {
@@ -46,7 +46,7 @@ pub extern "C" fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
 ///
 /// # Returns
 /// A pointer to the destination `dest`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn memmove(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
     if src < dest as *const u8 {
         for i in (0..n).rev() {
@@ -74,7 +74,7 @@ pub extern "C" fn memmove(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
 /// # Returns
 /// An integer less than, equal to, or greater than zero if the first `n` bytes of `s1`
 /// is found, respectively, to be less than, to match, or be greater than the first `n` bytes of `s2`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn memcmp(s1: *const u8, s2: *const u8, n: usize) -> i32 {
     for i in 0..n {
         let a = unsafe { *s1.add(i) };
@@ -93,7 +93,7 @@ pub extern "C" fn memcmp(s1: *const u8, s2: *const u8, n: usize) -> i32 {
 ///
 /// # Returns
 /// The number of bytes in the string pointed to by `s`, excluding the terminating null byte.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn strlen(s: *const u8) -> usize {
     let mut count = 0;
     unsafe {
@@ -103,3 +103,6 @@ pub extern "C" fn strlen(s: *const u8) -> usize {
     }
     count
 }
+
+#[unsafe(no_mangle)]
+pub extern "C" fn __chkstk() {}

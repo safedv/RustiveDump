@@ -1,4 +1,4 @@
-extern "C" {
+unsafe extern "C" {
     // Declaration of an external syscall function with a variadic argument list
     pub fn isyscall(ssn: u16, addr: usize, n_args: u32, ...) -> i32;
 }

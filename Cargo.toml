@@ -1,11 +1,11 @@
 [package]
 name = "RustiveDump"
 version = "0.1.1"
-edition = "2021"
+edition = "2024"
 authors = ["safedv"]
 
 [dependencies]
-panic-halt = "0.2.0"
+panic-halt = "1.0.0"
 
 [profile.dev]
 panic = "abort"

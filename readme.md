@@ -1,37 +1,44 @@
 ## **RustiveDump**
 
-**RustiveDump** is a Rust-based tool designed to dump the memory of the **lsass.exe** process using **only NT system calls**.
-
-It creates a minimal minidump file from scratch, containing essential components like **SystemInfo**, **ModuleList**, and **Memory64List**, with support for **XOR encryption** and **remote transmission**.
-
-Additionally, RustiveDump now implements the design of [Rustic64](https://github.com/safedv/Rustic64), allowing it to be compiled as **Position Independent Code (PIC)**, making it more versatile.
+**RustiveDump** is a Rust-based tool designed to dump the memory of the **lsass.exe** process using **only NT system calls**. It creates a minimal minidump file from scratch, containing essential components like **SystemInfo**, **ModuleList**, and **Memory64List**, with support for **XOR encryption** and **remote transmission**.
 
 This project is a personal learning experience, focusing on leveraging native Windows APIs for memory dumping and building a minimalistic minidump file entirely from the ground up.
 
+###### Shellcode (PIC) - v.0.1.1
+
+RustiveDump now implements the design of [Rustic64](https://github.com/safedv/Rustic64), allowing it to be compiled as **Position Independent Code (PIC)**, making it more versatile.
+
+###### MSVC & Rust 2024 - v.0.1.2
+
+The latest release of **RustiveDump** introduces support for **Position Independent Code (PIC)** compilation using the **MSVC toolchain**, along with updates to the **Rust 2024 edition**.
+
 ## **Key Features**
 
-1. **NT System Calls for Everything**:
-   RustiveDump bypasses standard APIs and leverages NT system calls for all its operations.
-
-2. **No-Std and CRT-Independent**:  
-   RustiveDump is built using Rust's `no_std` feature, which removes reliance on Rust's standard library, and it's also **CRT library independent**. This resulting in a lean release build of only **18KB**.
-
-3. **Position Independent Code (PIC)**:  
+1. **Position Independent Code (PIC)**:  
    RustiveDump now implements the design of Rustic64, allowing it to be compiled as `shellcode (PIC)`, making it more versatile.
 
-4. **Indirect NT Syscalls**:  
+2. **Cross-Compilation Support**:
+   RustiveDump now supports both **GNU** and **MSVC** targets, enabling cross-compilation and compatibility across different environments.
+
+3. **NT System Calls for Everything**:
+   RustiveDump bypasses standard APIs and leverages NT system calls for all its operations.
+
+4. **No-Std and CRT-Independent**:  
+   RustiveDump is built using Rust's `no_std` feature, which removes reliance on Rust's standard library, and it's also **CRT library independent**. This resulting in a lean release build of only **18KB**.
+
+5. **Indirect NT Syscalls**:  
    The tool uses indirect syscalls, retrieving system service numbers (SSN) with techniques like **Hell’s Gate**, **Halo's Gate**, and **Tartarus' Gate**.
 
-5. **Lean Memory Dump**:  
+6. **Lean Memory Dump**:  
    RustiveDump generates a focused memory dump, containing only essential data (i.e., **SystemInfo**, **ModuleList**, and **Memory64List**), ensuring no bloated files—just enough to feed your memory analysis tools like **Mimikatz** or **Pypykatz**.
 
-6. **XOR Encryption**:  
+7. **XOR Encryption**:  
    RustiveDump can encrypt the dump file using XOR before saving or transmitting it, adding an extra layer of security to the dumped memory.
 
-7. **Remote File Transmission**:  
+8. **Remote File Transmission**:  
    The dump file can be sent directly to a remote server using **winsock** APIs calls
 
-8. **Debug Mode**:  
+9. **Debug Mode**:  
    The debug mode provides detailed logs of each step, which can be enabled during the build process.
 
 ## **How it works**
@@ -72,15 +79,22 @@ To build RustiveDump with different combinations of features, use the following 
   cargo make
   ```
 
-- **Build with specific features**
+- **Build as Portable Executable (PE) with specific features**
 
   ```bash
   cargo make --env FEATURES=xor,remote,lsasrv,debug
   ```
 
-- **Build as Shellcode (PIC)**
+- **Build as Shellcode (PIC) for GNU target**
+
   ```bash
-  cargo make --env FEATURES=xor,remote pic
+  cargo make --env FEATURES=xor,remote pic-gnu
+  ```
+
+- **Build as Shellcode (PIC) for MSVC target**
+
+  ```bash
+  cargo make --env FEATURES=xor,remote pic-msvc
   ```
 
 ## **Memory Dump File Structure**
@@ -107,4 +121,6 @@ Always follow ethical guidelines and legal frameworks when doing security resear
 
 Contributions are welcome! If you want to help improve RustiveDump or report bugs, feel free to open an issue or a pull request in the repository.
 
----
+## Changelog
+
+See the full list of changes in the [Changelog](./CHANGELOG.md).

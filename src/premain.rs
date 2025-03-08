@@ -12,7 +12,7 @@ use crate::debug::k32::init_kernel32_funcs;
 #[cfg(feature = "remote")]
 use crate::remote::winsock::init_winsock_funcs;
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn initialize() {
     unsafe {
         // Stack allocation of Instance
@@ -103,7 +103,7 @@ skip:
 "#
 );
 
-extern "C" {
+unsafe extern "C" {
     pub fn _start();
 }
 
