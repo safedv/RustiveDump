@@ -2,6 +2,10 @@
 skip_core_tasks = true
 
 [env]
+NIGHTLY_VERSION = "nightly-2025-02-14"
+OUTPUT_NAME = "RustiveDump.exe"
+OUTPUT_BIN = "RustiveDump.bin"
+
 # Target platforms
 TARGET_GNU = "x86_64-pc-windows-gnu"
 TARGET_MSVC = "x86_64-pc-windows-msvc"
@@ -25,18 +29,25 @@ dependencies = ["clean", "cargo-build", "strip"]
 description = "Cleans the project directory, removing old binaries."
 script = [
     "cargo clean"
-]
+]   
 
 [tasks.cargo-build]
 description = "Compiles the project for the GNU target (exe)."
-command = "rustup"
-args = ["run", "nightly-2025-02-13-x86_64-pc-windows-gnu", "cargo", "rustc", "--target", "${TARGET_GNU}", "--release", "--features", "${FEATURES}"]
+script_runner = "@duckscript"
+script = '''
+features = get_env FEATURES
+if is_empty ${features}
+    exec --fail-on-error rustup run ${NIGHTLY_VERSION}-x86_64-pc-windows-gnu cargo rustc --target ${TARGET_GNU} --release
+else
+    exec --fail-on-error rustup run ${NIGHTLY_VERSION}-x86_64-pc-windows-gnu cargo rustc --target ${TARGET_GNU} --release --features ${features}
+end
+'''
 env = { "RUSTFLAGS" = "${RUSTFLAGS_GNU_EXE}" }
 
 [tasks.strip]
 description = "Strips unneeded sections from the GNU binary."
 command = "strip"
-args = ["-s", "--strip-unneeded", "-x", "-X", "target/${TARGET_GNU}/release/RustiveDump.exe"]
+args = ["-s", "--strip-unneeded", "-x", "-X", "target/${TARGET_GNU}/release/${OUTPUT_NAME}"]
 
 [tasks.pic-gnu]
 description = "Builds the project as Shellcode (PIC) for the GNU target."
@@ -46,19 +57,26 @@ dependencies = ["cleanpic", "cargo-build-pic-gnu", "strip", "objcopy"]
 description = "Cleans the project and removes the old PIC binary."
 script = [
     "cargo clean",
-    "rm -f RustiveDump.bin"
+    "rm -f ${OUTPUT_BIN}"
 ]
 
 [tasks.cargo-build-pic-gnu]
 description = "Compiles the project as PIC for the GNU target."
-command = "rustup"
-args = ["run", "nightly-2025-02-13-x86_64-pc-windows-gnu", "cargo", "rustc", "--target", "${TARGET_GNU}", "--release", "--features", "${FEATURES}"]
+script_runner = "@duckscript"
+script = '''
+features = get_env FEATURES
+if is_empty ${features}
+    exec --fail-on-error rustup run ${NIGHTLY_VERSION}-x86_64-pc-windows-gnu cargo rustc --target ${TARGET_GNU} --release
+else
+    exec --fail-on-error rustup run ${NIGHTLY_VERSION}-x86_64-pc-windows-gnu cargo rustc --target ${TARGET_GNU} --release --features ${features}
+end
+'''
 env = { "RUSTFLAGS" = "${RUSTFLAGS_GNU_PIC}" }
 
 [tasks.objcopy]
 description = "Converts the GNU binary to a .bin file using objcopy."
 command = "objcopy"
-args = ["-O", "binary", "target/${TARGET_GNU}/release/RustiveDump.exe", "RustiveDump.bin"]
+args = ["-O", "binary", "target/${TARGET_GNU}/release/${OUTPUT_NAME}", "${OUTPUT_BIN}"]
 
 [tasks.pic-msvc]
 description = "Builds the project as Shellcode (PIC) for the MSVC target."
@@ -66,16 +84,23 @@ dependencies = ["clean", "cargo-build-pic-msvc", "strip-msvc", "objcopy-msvc"]
 
 [tasks.cargo-build-pic-msvc]
 description = "Compiles the project as PIC for the MSVC target."
-command = "rustup"
-args = ["run", "nightly-2025-02-13-x86_64-pc-windows-msvc", "cargo", "rustc", "--target", "${TARGET_MSVC}", "--release", "--features", "${FEATURES}"]
+script_runner = "@duckscript"
+script = '''
+features = get_env FEATURES
+if is_empty ${features}
+    exec --fail-on-error rustup run ${NIGHTLY_VERSION}-x86_64-pc-windows-msvc cargo rustc --target ${TARGET_MSVC} --release
+else
+    exec --fail-on-error rustup run ${NIGHTLY_VERSION}-x86_64-pc-windows-msvc cargo rustc --target ${TARGET_MSVC} --release --features ${features}
+end
+'''
 env = { "RUSTFLAGS" = "${RUSTFLAGS_MSVC_PIC}" }
 
 [tasks.strip-msvc]
 description = "Strips unneeded sections from the MSVC binary."
 command = "strip"
-args = ["-s", "--strip-unneeded", "-x", "-X", "target/${TARGET_MSVC}/release/RustiveDump.exe"]
+args = ["-s", "--strip-unneeded", "-x", "-X", "target/${TARGET_MSVC}/release/${OUTPUT_NAME}"]
 
 [tasks.objcopy-msvc]
 description = "Converts the MSVC binary to a .bin file using objcopy."
 command = "objcopy"
-args = ["-O", "binary", "target/${TARGET_MSVC}/release/RustiveDump.exe", "RustiveDump.bin"]
+args = ["-O", "binary", "target/${TARGET_MSVC}/release/${OUTPUT_NAME}", "${OUTPUT_BIN}"]
